@@ -1,45 +1,32 @@
 import cv2
 import numpy as np
+from ultralytics import YOLO
 
-def load_model(config_path, weights_path):
-    net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
-    net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
-    net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
-    return net
 
-def get_output_layers(net):
-    layer_names = net.getLayerNames()
-    output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
-    return output_layers
+def load_model(model_path):
+    model = YOLO(model_path)
+    return model
 
-def detect_objects(frame, net, output_layers, conf_threshold=0.5, nms_threshold=0.4):
-    height, width = frame.shape[:2]
-    blob = cv2.dnn.blobFromImage(frame, 1/255.0, (416, 416), swapRB=True, crop=False)
-    net.setInput(blob)
-    outputs = net.forward(output_layers)
 
-    class_ids = []
-    confidences = []
+def detect_objects(frame, model, conf_threshold=0.5):
+    results = model(frame, verbose=False)
     boxes = []
+    confidences = []
+    class_ids = []
 
-    for output in outputs:
-        for detection in output:
-            scores = detection[5:]
-            class_id = np.argmax(scores)
-            confidence = scores[class_id]
+    for result in results:
+        for box in result.boxes:
+            x_min, y_min, x_max, y_max = map(int, box.xyxy[0].tolist())
+            confidence = box.conf[0].item()
+            class_id = int(box.cls[0].item())
+
             if confidence > conf_threshold:
-                center_x = int(detection[0] * width)
-                center_y = int(detection[1] * height)
-                w = int(detection[2] * width)
-                h = int(detection[3] * height)
-                x = int(center_x - w / 2)
-                y = int(center_y - h / 2)
-                boxes.append([x, y, w, h])
-                confidences.append(float(confidence))
+                boxes.append([x_min, y_min, x_max - x_min, y_max - y_min])
+                confidences.append(confidence)
                 class_ids.append(class_id)
 
-    indices = cv2.dnn.NMSBoxes(boxes, confidences, conf_threshold, nms_threshold)
-    return boxes, confidences, class_ids, indices
+    return boxes, confidences, class_ids, np.arange(len(boxes))  # Return all indices since NMS is handled by YOLOv8
+
 
 def draw_predictions(frame, boxes, confidences, class_ids, indices, classes):
     for i in indices:
@@ -48,16 +35,15 @@ def draw_predictions(frame, boxes, confidences, class_ids, indices, classes):
         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
         cv2.putText(frame, label, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
+
 def main():
-    config_path = "../models/yolov3-tiny/yolov3-tiny.cfg"
-    weights_path = "../models/yolov3-tiny/yolov3-tiny.weights"
-    classes_path = "../models/yolov3-tiny/coco.names"
+    model_path = "../models/yolov8n/yolov8n.pt"
+    classes_path = "../models/yolov8n/coco.names"
 
     with open(classes_path, "r") as f:
         classes = [line.strip() for line in f.readlines()]
 
-    net = load_model(config_path, weights_path)
-    output_layers = get_output_layers(net)
+    model = load_model(model_path)
 
     cap = cv2.VideoCapture(0)
 
@@ -66,7 +52,7 @@ def main():
         if not ret:
             break
 
-        boxes, confidences, class_ids, indices = detect_objects(frame, net, output_layers)
+        boxes, confidences, class_ids, indices = detect_objects(frame, model)
         draw_predictions(frame, boxes, confidences, class_ids, indices, classes)
 
         cv2.imshow("Object Detection", frame)
@@ -75,6 +61,7 @@ def main():
 
     cap.release()
     cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     main()
