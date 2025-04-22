@@ -49,9 +49,9 @@ def draw_predictions(frame, boxes, confidences, class_ids, indices, classes):
         cv2.putText(frame, label, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
 def main():
-    config_path = "yolov3-tiny.cfg"
-    weights_path = "yolov3-tiny.weights"
-    classes_path = "coco.names"
+    config_path = "../models/yolov3-tiny/yolov3-tiny.cfg"
+    weights_path = "../models/yolov3-tiny/yolov3-tiny.weights"
+    classes_path = "../models/yolov3-tiny/coco.names"
 
     with open(classes_path, "r") as f:
         classes = [line.strip() for line in f.readlines()]
