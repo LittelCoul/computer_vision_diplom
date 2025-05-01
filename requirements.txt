@@ -1,3 +1,4 @@
 opencv-python
 numpy
 ultralytics
+ultralytics_torch_torchvision
