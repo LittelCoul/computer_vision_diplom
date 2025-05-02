@@ -1,45 +1,10 @@
-# import cv2
-# import numpy as np
-# from ultralytics import YOLO
-#
-#
-# def main():
-#     # 1. Загрузка модели и классов
-#     model = YOLO("../models/yolov8n/best.pt")  # Ваша обученная модель
-#     class_names = model.names  # Автоматическое получение имен классов
-#
-#     # 2. Инициализация камеры
-#     cap = cv2.VideoCapture(0)
-#
-#     while True:
-#         ret, frame = cap.read()
-#         if not ret:
-#             break
-#
-#         # 3. Детекция объектов
-#         results = model(frame, conf=0.09, verbose=False)
-#
-#         # 4. Визуализация
-#         for result in results:
-#             for box in result.boxes:
-#                 x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-#                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-#                 label = f"{class_names[int(box.cls)]}: {box.conf:.2f}"
-#                 cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-#
-#         cv2.imshow("YOLOv8 Detection", frame)
-#         if cv2.waitKey(1) == ord('q'):
-#             break
-#
-#     cap.release()
-#     cv2.destroyAllWindows()
-#
-#
-# if __name__ == "__main__":
-#     main()
 import cv2
 import numpy as np
 from ultralytics import YOLO
+
+train_dir_name = 'train'
+model_path = f"../models/run/{train_dir_name}/weights/best.pt"
+classes_path = "../models/pallet.names"
 
 
 def load_model(model_path):
@@ -76,8 +41,6 @@ def draw_predictions(frame, boxes, confidences, class_ids, indices, classes):
 
 
 def main():
-    model_path = "../models/yolov8n/best.pt"
-    classes_path = "../models/yolov8n/coco_1.names"
 
     with open(classes_path, "r") as f:
         classes = [line.strip() for line in f.readlines()]

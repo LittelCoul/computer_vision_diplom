@@ -2,3 +2,5 @@
 .venv
 venv
 models
+dataset
+runs
