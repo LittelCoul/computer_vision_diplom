@@ -513,3 +513,136 @@ model.export(format='onnx')
 - Для **YOLOv5/YOLOv8** используйте официальные скрипты (проще всего).
 - Для **YOLOv4-tiny** потребуется Darknet (больше ручной работы).
 - Для встраиваемых устройств применяйте **quantization** (FP16/INT8).
+
+
+
+
+# Обучение YOLO
+
+**1. Подготовка данных**
+
+YOLOv8 требует данные в формате YOLO (файлы `.txt` с аннотациями в формате `class_id x_center y_center width height`).
+
+**Структура папок**
+
+```
+dataset/
+├── images/
+│   ├── train/
+│   ├── val/
+│   └── test/ (опционально)
+└── labels/
+    ├── train/
+    ├── val/
+    └── test/ (опционально)
+```
+
+- **Изображения** – `.jpg`, `.png` и т. д.
+- **Аннотации** – `.txt` (по одному на каждое изображение).
+
+Пример аннотации (файл `.txt`):
+
+```
+0 0.5 0.5 0.3 0.2  # class_id, x_center, y_center, width, height
+```
+
+**Подготовка .yaml-файла**
+
+Создайте конфигурационный файл `data.yaml`:
+
+```yaml
+train: dataset/images/train
+val: dataset/images/val
+nc: 5  # число классов
+names: ["класс1", "класс2", ...]
+```
+
+**2. Установка Ultralytics YOLOv8**
+
+```bash
+pip install ultralytics
+```
+
+---
+
+**3. Запуск обучения**
+
+**Стандартное обучение**
+
+```python
+from ultralytics import YOLO
+
+model = YOLO("yolov8n.pt")  # или "yolov8n.yaml" для обучения с нуля
+results = model.train(
+    data="data.yaml",  # путь к конфигу
+    epochs=100,        # число эпох
+    batch=16,          # размер батча
+    imgsz=640,         # размер изображения
+    lr0=0.01,          # начальный learning rate
+    device="0",        # GPU (0, 1, ...) или "cpu"
+    optimizer="auto",  # "SGD", "Adam", ...
+    name="exp1"        # имя эксперимента (сохранится в runs/)
+)
+```
+
+**Продвинутые параметры**
+
+- `weight_decay=0.0005` – регуляризация (L2).
+- `cos_lr=True` – косинусный планировщик LR.
+- `patience=50` – ранняя остановка.
+- `pretrained=True` – использовать предобученные веса.
+- `augment=True` – аугментация данных.
+
+---
+
+**4. Мониторинг обучения**
+
+- Логи сохраняются в `runs/train/expN/`.
+- Используйте **TensorBoard**:
+    
+    ```bash
+    tensorboard --logdir runs/train
+    ```
+    
+- Проверьте `results.csv` и `weights/last.pt` (последняя модель).
+
+---
+
+**5. Оценка и выводы**
+
+**Тестирование модели**
+
+```python
+metrics = model.val()  # оценка на валидации
+print(metrics.box.map)  # mAP50
+```
+
+**Инференс**
+
+```python
+results = model.predict("test_image.jpg", conf=0.5, iou=0.5)
+```
+
+---
+
+**Советы по улучшению качества**
+
+1. **Увеличьте разнообразие данных** (аугментация разрешена по умолчанию).
+2. **Настройте гиперпараметры** (`lr0`, `batch`, `optimizer`).
+3. **Попробуйте Fine-Tuning** (заморозка слоев).
+4. **Используйте более крупную модель** (`yolov8m`, `yolov8l`), если точность важнее скорости.
+
+---
+
+**Пример команд для CLI**
+
+```bash
+yolo train data=data.yaml model=yolov8n.pt epochs=100 imgsz=640 batch=16
+```
+
+```bash
+yolo val model=runs/train/exp/weights/best.pt data=data.yaml
+```
+
+
+
