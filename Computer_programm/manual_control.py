@@ -5,7 +5,7 @@ import keyboard
 import threading
 import time
 
-ORANGE_PI_IP = '192.168.1.XXX'  # <-- ЗАМЕНИТЕ НА IP ORANGE PI
+ORANGE_PI_IP = '192.168.1.38'  # <-- ЗАМЕНИТЕ НА IP ORANGE PI
 PORT = 5000
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
