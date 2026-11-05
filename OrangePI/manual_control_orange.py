@@ -10,6 +10,7 @@ PORT = 5000
 ARDUINO_PORT = '/dev/ttyACM0'
 BAUD = 9600
 
+# --- Подключение к Arduino ---
 try:
     ser = serial.Serial(ARDUINO_PORT, BAUD, timeout=1)
     time.sleep(2)
@@ -18,6 +19,7 @@ except Exception as e:
     print(f"Ошибка подключения к Arduino: {e}")
     exit(1)
 
+# --- Инициализация камеры ---
 cap = cv2.VideoCapture('/dev/video1', cv2.CAP_V4L2)
 cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
@@ -37,6 +39,7 @@ def send_to_arduino(cmd):
 
 
 def handle_client(client_socket):
+    """Принимает команды от компьютера. Сокет НЕ закрывает — это делает stream_video."""
     while True:
         try:
             data = client_socket.recv(1024).decode().strip()
@@ -75,27 +78,34 @@ def handle_client(client_socket):
         except Exception as e:
             print(f"Ошибка клиента: {e}")
             break
-    client_socket.close()
+    print("Поток команд завершён.")
 
 
 def stream_video(client_socket):
+    """Отправляет видео. Именно этот поток закрывает сокет в finally."""
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
-                print("Камера не отдаёт кадр")
                 time.sleep(0.1)
                 continue
             _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
             data = buffer.tobytes()
             client_socket.sendall(len(data).to_bytes(4, 'big'))
             client_socket.sendall(data)
+    except (BrokenPipeError, ConnectionResetError, OSError) as e:
+        print(f"Соединение потеряно: {e}")
     except Exception as e:
         print(f"Ошибка видео: {e}")
     finally:
-        client_socket.close()
+        try:
+            client_socket.close()
+            print("Сокет закрыт.")
+        except Exception:
+            pass
 
 
+# --- Сервер ---
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 server.bind((HOST, PORT))
