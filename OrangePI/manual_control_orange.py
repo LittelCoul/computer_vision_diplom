@@ -27,12 +27,14 @@ if not cap.isOpened():
     print("Не удалось открыть камеру")
     exit(1)
 
+
 def send_to_arduino(cmd):
     try:
         ser.write((cmd + '\n').encode())
         print(f"-> Arduino: {cmd}")
     except Exception as e:
         print(f"Ошибка отправки: {e}")
+
 
 def handle_client(client_socket):
     while True:
@@ -42,35 +44,48 @@ def handle_client(client_socket):
                 break
             print(f"<- Компьютер: {data}")
 
-            if data == 'W':          # Вперёд (инвертировано)
+            if data == 'W':
                 send_to_arduino("M,200,0")
-            elif data == 'S':        # Назад (инвертировано)
+            elif data == 'S':
                 send_to_arduino("M,200,1")
-            elif data == 'A':        # Колёса влево
+            elif data == 'A':
                 send_to_arduino("S,135")
-            elif data == 'D':        # Колёса вправо
+            elif data == 'D':
                 send_to_arduino("S,45")
-            elif data == 'Q':        # Шаговый вперёд
+            elif data == 'Q':
                 send_to_arduino("T,200,1")
-            elif data == 'E':        # Шаговый назад
+            elif data == 'E':
                 send_to_arduino("T,200,0")
-            elif data == 'Z':        # СТОП колёс
+            elif data == 'Z':
                 send_to_arduino("M,0,1")
-            elif data == 'C':        # Колёса прямо
+            elif data == 'C':
                 send_to_arduino("S,90")
-            elif data == 'STOP':     # Экстренная остановка
+            elif data.startswith('CAM,'):
+                try:
+                    parts = data.split(',')
+                    pan = int(parts[1])
+                    tilt = int(parts[2])
+                    pan = max(0, min(180, pan))
+                    tilt = max(0, min(180, tilt))
+                    send_to_arduino(f"C,{pan},{tilt}")
+                except (ValueError, IndexError):
+                    print(f"Некорректная команда камеры: {data}")
+            elif data == 'STOP':
                 send_to_arduino("M,0,1")
         except Exception as e:
             print(f"Ошибка клиента: {e}")
             break
     client_socket.close()
 
+
 def stream_video(client_socket):
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
-                break
+                print("Камера не отдаёт кадр")
+                time.sleep(0.1)
+                continue
             _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
             data = buffer.tobytes()
             client_socket.sendall(len(data).to_bytes(4, 'big'))
@@ -79,6 +94,7 @@ def stream_video(client_socket):
         print(f"Ошибка видео: {e}")
     finally:
         client_socket.close()
+
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
