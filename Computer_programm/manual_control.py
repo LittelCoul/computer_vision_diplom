@@ -4,10 +4,13 @@ import numpy as np
 import keyboard
 import threading
 import time
+import tkinter as tk
+from PIL import Image, ImageTk
 
 ORANGE_PI_IP = '192.168.1.38'
 PORT = 5000
 
+# ============ ПОДКЛЮЧЕНИЕ ============
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 try:
     client.connect((ORANGE_PI_IP, PORT))
@@ -16,13 +19,15 @@ except Exception as e:
     print(f"Ошибка подключения: {e}")
     exit(1)
 
-# Флаг остановки для потока видео
 stop_event = threading.Event()
 
-# Текущие углы камеры (pan, tilt)
+# Углы камеры
 cam_pan = 90
 cam_tilt = 90
-CAM_STEP = 10  # шаг поворота камеры в градусах
+CAM_STEP = 10
+
+# Режим: 'manual' или 'auto'
+current_mode = 'manual'
 
 
 def send_command(cmd):
@@ -32,7 +37,13 @@ def send_command(cmd):
         print(f"Ошибка отправки: {e}")
 
 
+# ============ ПРИЁМ ВИДЕО ============
+latest_frame = None
+frame_lock = threading.Lock()
+
+
 def receive_video():
+    global latest_frame
     while not stop_event.is_set():
         try:
             client.settimeout(1.0)
@@ -57,11 +68,8 @@ def receive_video():
 
             frame = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
             if frame is not None:
-                cv2.imshow('Orange Pi Camera', frame)
-                key = cv2.waitKey(1) & 0xFF
-                if key == 27:  # ESC
-                    stop_event.set()
-                    break
+                with frame_lock:
+                    latest_frame = frame
         except socket.timeout:
             continue
         except OSError:
@@ -72,126 +80,202 @@ def receive_video():
             continue
 
 
-video_thread = threading.Thread(target=receive_video, daemon=True)
-video_thread.start()
+threading.Thread(target=receive_video, daemon=True).start()
 
-print("Управление:")
-print("  W/S — вперёд/назад (автостоп при отпускании)")
-print("  A/D — колёса влево/вправо")
-print("  Z   — стоп колёс")
-print("  C   — колёса прямо")
-print("  Q/E — шаговый мотор вперёд/назад")
-print("  8/2 — камера вверх/вниз")
-print("  4/6 — камера влево/вправо")
-print("  ESC — выход")
 
-last_state = {'W': False, 'S': False, 'A': False, 'D': False}
-last_q = last_e = last_z = last_c = False
-last_8 = last_2 = last_4 = last_6 = False
-
-try:
+# ============ АВТОМАТИЧЕСКИЙ РЕЖИМ ============
+def auto_mode_loop():
+    """Простая заготовка авторежима: едет вперёд, если перед камерой нет крупного объекта.
+    Замените логику на свою (объезд препятствий, слежение за объектом и т.д.)."""
     while not stop_event.is_set():
-        # --- W / S с автостопом ---
-        w_pressed = keyboard.is_pressed('w')
-        s_pressed = keyboard.is_pressed('s')
+        if current_mode != 'auto':
+            time.sleep(0.2)
+            continue
 
-        if w_pressed and not last_state['W']:
+        # Заготовка: едем вперёд
+        send_command('W')
+        time.sleep(0.5)
+        send_command('Z')
+        time.sleep(0.5)
+
+
+threading.Thread(target=auto_mode_loop, daemon=True).start()
+
+
+# ============ РУЧНОЕ УПРАВЛЕНИЕ ============
+def manual_control_loop():
+    last_state = {'W': False, 'S': False, 'A': False, 'D': False}
+    last_q = last_e = last_z = last_c = False
+    last_8 = last_2 = last_4 = last_6 = False
+
+    while not stop_event.is_set():
+        if current_mode != 'manual':
+            time.sleep(0.05)
+            continue
+
+        w = keyboard.is_pressed('w')
+        s = keyboard.is_pressed('s')
+        if w and not last_state['W']:
             send_command('W')
-        if not w_pressed and last_state['W']:
+        if not w and last_state['W']:
             send_command('Z')
-        last_state['W'] = w_pressed
+        last_state['W'] = w
 
-        if s_pressed and not last_state['S']:
+        if s and not last_state['S']:
             send_command('S')
-        if not s_pressed and last_state['S']:
+        if not s and last_state['S']:
             send_command('Z')
-        last_state['S'] = s_pressed
+        last_state['S'] = s
 
-        # --- A / D ---
-        a_pressed = keyboard.is_pressed('a')
-        d_pressed = keyboard.is_pressed('d')
-        if a_pressed and not last_state['A']:
+        a = keyboard.is_pressed('a')
+        d = keyboard.is_pressed('d')
+        if a and not last_state['A']:
             send_command('A')
-        last_state['A'] = a_pressed
-        if d_pressed and not last_state['D']:
+        last_state['A'] = a
+        if d and not last_state['D']:
             send_command('D')
-        last_state['D'] = d_pressed
+        last_state['D'] = d
 
-        # --- Q / E / Z / C ---
-        q_pressed = keyboard.is_pressed('q')
-        if q_pressed and not last_q:
+        q = keyboard.is_pressed('q')
+        if q and not last_q:
             send_command('Q')
-        last_q = q_pressed
+        last_q = q
 
-        e_pressed = keyboard.is_pressed('e')
-        if e_pressed and not last_e:
+        e = keyboard.is_pressed('e')
+        if e and not last_e:
             send_command('E')
-        last_e = e_pressed
+        last_e = e
 
-        z_pressed = keyboard.is_pressed('z')
-        if z_pressed and not last_z:
+        z = keyboard.is_pressed('z')
+        if z and not last_z:
             send_command('Z')
-        last_z = z_pressed
+        last_z = z
 
-        c_pressed = keyboard.is_pressed('c')
-        if c_pressed and not last_c:
+        c = keyboard.is_pressed('c')
+        if c and not last_c:
             send_command('C')
-        last_c = c_pressed
+        last_c = c
 
-        # --- Камера: 8/2/6/4 ---
+        global cam_pan, cam_tilt
+
         k8 = keyboard.is_pressed('8')
         if k8 and not last_8:
-            cam_tilt = max(0, cam_tilt - CAM_STEP)   # вверх
+            cam_tilt = max(0, cam_tilt - CAM_STEP)
             send_command(f'CAM,{cam_pan},{cam_tilt}')
         last_8 = k8
 
         k2 = keyboard.is_pressed('2')
         if k2 and not last_2:
-            cam_tilt = min(180, cam_tilt + CAM_STEP)  # вниз
+            cam_tilt = min(180, cam_tilt + CAM_STEP)
             send_command(f'CAM,{cam_pan},{cam_tilt}')
         last_2 = k2
 
         k6 = keyboard.is_pressed('6')
         if k6 and not last_6:
-            cam_pan = min(180, cam_pan + CAM_STEP)    # вправо
+            cam_pan = min(180, cam_pan + CAM_STEP)
             send_command(f'CAM,{cam_pan},{cam_tilt}')
         last_6 = k6
 
         k4 = keyboard.is_pressed('4')
         if k4 and not last_4:
-            cam_pan = max(0, cam_pan - CAM_STEP)      # влево
+            cam_pan = max(0, cam_pan - CAM_STEP)
             send_command(f'CAM,{cam_pan},{cam_tilt}')
         last_4 = k4
 
-        # --- Выход ---
-        if keyboard.is_pressed('esc'):
-            print("Выход...")
-            stop_event.set()
-            break
-
         time.sleep(0.02)
 
-except KeyboardInterrupt:
-    stop_event.set()
 
-finally:
+threading.Thread(target=manual_control_loop, daemon=True).start()
+
+
+# ============ GUI ============
+root = tk.Tk()
+root.title("Управление роботом")
+root.geometry("900x600")
+
+# Левая часть — видео
+video_label = tk.Label(root, bg='black')
+video_label.pack(side=tk.LEFT, padx=10, pady=10, fill=tk.BOTH, expand=True)
+
+# Правая часть — панель управления
+panel = tk.Frame(root, width=220, bg='#f0f0f0')
+panel.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
+panel.pack_propagate(False)
+
+mode_label = tk.Label(panel, text="Режим: РУЧНОЙ", font=('Arial', 12, 'bold'), bg='#f0f0f0')
+mode_label.pack(pady=(10, 20))
+
+
+def set_manual():
+    global current_mode
+    current_mode = 'manual'
+    mode_label.config(text="Режим: РУЧНОЙ", fg='black')
+    send_command('Z')  # на всякий случай стоп
+
+
+def set_auto():
+    global current_mode
+    current_mode = 'auto'
+    mode_label.config(text="Режим: АВТО", fg='blue')
+
+
+btn_manual = tk.Button(panel, text="Ручное управление", command=set_manual,
+                       width=20, height=2, font=('Arial', 11))
+btn_manual.pack(pady=5)
+
+btn_auto = tk.Button(panel, text="Автоматическое управление", command=set_auto,
+                     width=20, height=2, font=('Arial', 11))
+btn_auto.pack(pady=5)
+
+hint = tk.Label(panel,
+                text=("Ручной режим:\n"
+                      "W/S — вперёд/назад\n"
+                      "A/D — колёса влево/вправо\n"
+                      "Z — стоп, C — прямо\n"
+                      "Q/E — шаговый вперёд/назад\n"
+                      "8/2 — камера вверх/вниз\n"
+                      "4/6 — камера влево/вправо"),
+                justify=tk.LEFT, bg='#f0f0f0', font=('Arial', 9))
+hint.pack(pady=20, anchor='w')
+
+
+def update_frame():
+    if not stop_event.is_set():
+        with frame_lock:
+            frame = latest_frame
+        if frame is not None:
+            img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(img)
+            img = img.resize((640, 480), Image.LANCZOS)
+            imgtk = ImageTk.PhotoImage(image=img)
+            video_label.imgtk = imgtk
+            video_label.configure(image=imgtk)
+        root.after(30, update_frame)
+
+
+def on_close():
+    stop_event.set()
     try:
         send_command('Z')
     except Exception:
         pass
+    root.destroy()
 
-    stop_event.set()
-    video_thread.join(timeout=2.0)
 
-    try:
-        client.shutdown(socket.SHUT_RDWR)
-    except Exception:
-        pass
-    try:
-        client.close()
-    except Exception:
-        pass
+root.protocol("WM_DELETE_WINDOW", on_close)
+update_frame()
+root.mainloop()
 
-    cv2.destroyAllWindows()
-    cv2.waitKey(1)
-    print("Программа завершена.")
+
+# ============ ЗАВЕРШЕНИЕ ============
+stop_event.set()
+try:
+    client.shutdown(socket.SHUT_RDWR)
+except Exception:
+    pass
+try:
+    client.close()
+except Exception:
+    pass
+cv2.destroyAllWindows()
+print("Программа завершена.")
