@@ -1,13 +1,10 @@
-<<<<<<< HEAD
-    .venv/
+.venv/
 .idea/
 __pycache__/
 *.pycg
-=======
 .idea
-.venv
-venv
-models
-dataset
-runs
->>>>>>> first_tests
+vision_training\.venv
+vision_training\venv
+vision_training\models
+vision_training\dataset
+vision_training\runs
