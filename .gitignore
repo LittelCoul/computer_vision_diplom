@@ -1,4 +1,13 @@
+<<<<<<< HEAD
     .venv/
 .idea/
 __pycache__/
 *.pycg
+=======
+.idea
+.venv
+venv
+models
+dataset
+runs
+>>>>>>> first_tests
