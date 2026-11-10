@@ -3,8 +3,8 @@
 __pycache__/
 *.pycg
 .idea
-vision_training\.venv
-vision_training\venv
-vision_training\models
-vision_training\dataset
-vision_training\runs
+vision_training/.venv
+vision_training/venv
+vision_training/models
+vision_training/dataset
+vision_training/runs
